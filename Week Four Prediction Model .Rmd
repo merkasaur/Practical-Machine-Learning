@@ -1,0 +1,107 @@
+---
+title: "Practical Machine LearningWeek Four"
+author: "Merkasaur"
+date: "5/17/2020"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+*Practical Machine Learning
+**Week Four Project: Prediction
+
+"Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset)."
+
+To follow will be the prediction of the manner in which participants did their exercise. A report will be created to describe the methods utilized. 
+
+***Data acquirement and preparation
+
+```{r warning=FALSE}
+#Loading data for analysis
+training <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testing  <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+training_data <- read.csv(url(training))
+testing_data <- read.csv(url(testing))
+#Viewing data
+head(training_data)
+head(testing_data)
+
+```
+
+```{r message=FALSE, warning=FALSE}
+#Loading determined dependencies.
+require(caret)
+require(rpart)
+require(rpart.plot)
+require(rattle)
+```
+```{r}
+#Removing near zero, and na values. 95% tolerence.
+training_nearzeroremove <- nearZeroVar(training_data)
+training_data_manipulated <- training_data[,-training_nearzeroremove]
+testing_data_manipulated <- testing_data[,-training_nearzeroremove]
+na_val_col <- sapply(training_data_manipulated, function(x) mean(is.na(x))) > 0.95
+training_data_manipulated <- training_data_manipulated[,na_val_col == FALSE]
+testing_data_manipulated <- testing_data_manipulated[,na_val_col == FALSE]
+#Removing non-numeric values.
+training_data_manipulated <- training_data_manipulated[,8:59]
+testing_data_manipulated <- testing_data_manipulated[,8:59]
+#Calling dim after data manipulation
+print("Dimensions training data.")
+dim(training_data_manipulated)
+print("Dimensions testing data.")
+dim(testing_data_manipulated)
+```
+
+*Data Segregation. 
+Data will be rebalanced for further analysis.
+```{r}
+#Partition data for both testing and training datasets.
+partition <- createDataPartition(training_data_manipulated$classe, p=0.6, list=FALSE)
+training_data_partitioned <- training_data_manipulated[partition,]
+testing_data_partitioned <- training_data_manipulated[-partition,]
+```
+*Building Decision Tree
+```{r}
+decision_tree_fit <- train(classe~.,data=training_data_partitioned,method="rpart")
+decision_tree_prediction <- predict(decision_tree_fit, testing_data_partitioned)
+confusionMatrix(decision_tree_prediction, testing_data_partitioned$classe)
+fancyRpartPlot(decision_tree_fit$finalModel)
+```
+Roughly fifty percent accuracy is observed and is not within acceptable ranges. Model selection continues.
+
+#Random Forest Model Generation
+```{r}
+#RFM production.
+require(randomForest)
+randomforestfit <- train(classe ~. , data = training_data_partitioned, method = "rf", ntree = 100)
+randomforest_prediction <- predict(randomforestfit, testing_data_partitioned)
+randomforest_cm <- confusionMatrix(randomforest_prediction,
+                                   testing_data_partitioned$classe)
+#Calling the random forest confusion matrix.
+randomforest_cm
+```
+Utilizing the random forest model clearly achieved ninety nine percent accuracy.
+
+
+**Gradient Boosting Model
+```{r}
+require(gbm)
+mf_gbm <- train(classe~.,data=training_data_partitioned,
+                method="gbm",verbose=FALSE)
+pred_gbm <- predict(mf_gbm, testing_data_partitioned)
+pred_gbm_cf <- confusionMatrix(pred_gbm,testing_data_partitioned$classe)
+pred_gbm_cf
+```
+
+Gradient boosting model has been determined to be less accurate than a random forest model (96% to 99% accuracy respectively). The random forest model will be utilized for prediction on the test data set. 
+```{r}
+randomforest_testing_prediction <- predict(randomforestfit, testing_data_manipulated)
+randomforest_testing_prediction
+```
+**In closing
+
+It is determined that the random forest model was the most useful model for this project with the greatest accuracy at ninety nine percent. 
